@@ -965,9 +965,11 @@ private fun DeadlineChip(label: String, hot: Boolean, modifier: Modifier = Modif
     val background = if (hot) WarnBg else Fill
     val outline = if (hot) WarnLine else Line2
     val ink = if (hot) WarnInk else Ink2
+    val spoken = spokenDuration(label)
     Text(
         label,
         modifier = modifier
+            .then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier)
             .clip(RoundedCornerShape(5.dp))
             .background(background)
             .border(1.dp, outline, RoundedCornerShape(5.dp))
@@ -976,6 +978,23 @@ private fun DeadlineChip(label: String, hot: Boolean, modifier: Modifier = Modif
         fontWeight = FontWeight.SemiBold,
         color = ink,
     )
+}
+
+/**
+ * `deadline_label` arrives pre-formatted ("41m", "2h 14m", "1d 04h"). TalkBack reads a bare
+ * "m" as meters, so the chip gets these units spelled out for screen readers. Returns null
+ * for anything not in that shape, leaving TalkBack on the visible text.
+ */
+private fun spokenDuration(label: String): String? {
+    val parts = label.trim().split(Regex("\\s+"))
+    val units = mapOf('d' to "day", 'h' to "hour", 'm' to "minute")
+    val spoken = parts.map { part ->
+        val match = Regex("(\\d+)([dhm])").matchEntire(part) ?: return null
+        val count = match.groupValues[1].toInt()
+        val unit = units.getValue(match.groupValues[2][0])
+        "$count ${if (count == 1) unit else unit + "s"}"
+    }
+    return spoken.joinToString(" ")
 }
 
 /** The entry card's headline: annualized-at-floor, big, with the rubric gate check beside it. */
