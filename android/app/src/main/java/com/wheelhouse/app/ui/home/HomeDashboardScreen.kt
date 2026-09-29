@@ -51,6 +51,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -1154,8 +1157,12 @@ private fun OptionButton(
         OptionButtonStyle.GHOST -> Ink2
         OptionButtonStyle.PLAIN -> Ink
     }
-    Text(
-        option.label,
+    // The label is exposed as a contentDescription and the Text's own semantics are
+    // cleared: when a node's merged semantics contain Text, Compose's accessibility
+    // delegate overwrites the Role-derived className (android.widget.Button) with
+    // android.widget.TextView, so TalkBack never announced "Button". Putting the
+    // clickable directly on a Text can't avoid that — the text lands on the same node.
+    Box(
         // alpha goes first (outermost) so it fades the whole button — box, border, and
         // text together. Placed after background/border it only faded the text, and on
         // this device that combination went fully blank on the enabled→disabled→enabled
@@ -1167,12 +1174,19 @@ private fun OptionButton(
             .background(background)
             .border(1.dp, border, RoundedCornerShape(7.dp))
             .clickable(enabled = enabled, onClickLabel = option.label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = option.label }
             .padding(vertical = 9.dp),
-        fontSize = 12.5.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = ink,
-        textAlign = TextAlign.Center,
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            option.label,
+            modifier = Modifier.clearAndSetSemantics {},
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = ink,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 /**
