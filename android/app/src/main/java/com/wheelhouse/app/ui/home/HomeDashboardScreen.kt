@@ -58,6 +58,7 @@ import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -1046,16 +1047,22 @@ private fun ReasonsDisclosure(reasons: List<String>, openByDefault: Boolean, mod
             .drawBehind { drawLine(Line2, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) }
             .padding(top = 9.dp),
     ) {
+        // Expanded/collapsed is exposed as a state (stateDescription), not baked into the
+        // click label, so the spoken label stays the same across toggles. The arrow glyph
+        // only restates that state visually, so it's hidden from accessibility services.
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable(
-                    onClickLabel = if (expanded) "Collapse reasons" else "Expand reasons",
-                    role = Role.Button,
-                ) { expanded = !expanded },
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (expanded) "▾" else "▸", fontSize = 9.sp, color = Ink3)
+            Text(
+                if (expanded) "▾" else "▸",
+                modifier = Modifier.clearAndSetSemantics {},
+                fontSize = 9.sp,
+                color = Ink3,
+            )
             Text(
                 "Why the engine wants this (${reasons.size})",
                 modifier = Modifier.padding(start = 5.dp),
