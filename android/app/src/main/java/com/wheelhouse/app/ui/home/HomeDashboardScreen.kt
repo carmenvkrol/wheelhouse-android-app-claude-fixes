@@ -57,6 +57,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.collectionInfo
 import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
@@ -944,9 +945,11 @@ private fun CardHeader(
                 color = typeColor,
                 fontWeight = FontWeight.Bold,
             )
+            // Styled as the card's title, so it's exposed as a heading too — TalkBack
+            // announces it as one and heading navigation can jump between cards.
             Text(
                 action,
-                modifier = Modifier.padding(top = 3.dp),
+                modifier = Modifier.padding(top = 3.dp).semantics { heading() },
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
