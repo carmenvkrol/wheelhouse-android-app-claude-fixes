@@ -952,7 +952,9 @@ private fun CardHeader(
                 color = Ink,
                 lineHeight = 19.sp,
             )
-            Text(sub, modifier = Modifier.padding(top = 3.dp), fontSize = 10.5.sp, color = Ink3)
+            // Ink2, not Ink3: 10.5sp is normal-size text, so WCAG 1.4.3 needs 4.5:1 on
+            // Paper. Ink3 only reaches 3.28:1; Ink2 is 6.69:1.
+            Text(sub, modifier = Modifier.padding(top = 3.dp), fontSize = 10.5.sp, color = Ink2)
         }
         DeadlineChip(deadlineLabel, deadlineHot)
     }
