@@ -50,8 +50,12 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -1060,11 +1064,28 @@ private fun ReasonsDisclosure(reasons: List<String>, openByDefault: Boolean, mod
             )
         }
         if (expanded) {
-            Column(Modifier.padding(top = 9.dp)) {
-                reasons.forEach {
-                    Row(Modifier.padding(bottom = 4.dp)) {
-                        Text("•  ", fontSize = 11.5.sp, color = Ink2)
-                        Text(it, fontSize = 11.5.sp, color = Ink2, lineHeight = 16.sp)
+            // Exposed as a list so TalkBack announces each reason's position ("2 of 3").
+            // The bullet glyph is decorative and hidden; each row merges into one focus stop.
+            Column(
+                Modifier
+                    .padding(top = 9.dp)
+                    .semantics { collectionInfo = CollectionInfo(rowCount = reasons.size, columnCount = 1) },
+            ) {
+                reasons.forEachIndexed { index, reason ->
+                    Row(
+                        Modifier
+                            .padding(bottom = 4.dp)
+                            .semantics(mergeDescendants = true) {
+                                collectionItemInfo = CollectionItemInfo(
+                                    rowIndex = index,
+                                    rowSpan = 1,
+                                    columnIndex = 0,
+                                    columnSpan = 1,
+                                )
+                            },
+                    ) {
+                        Text("•  ", modifier = Modifier.clearAndSetSemantics {}, fontSize = 11.5.sp, color = Ink2)
+                        Text(reason, fontSize = 11.5.sp, color = Ink2, lineHeight = 16.sp)
                     }
                 }
             }
