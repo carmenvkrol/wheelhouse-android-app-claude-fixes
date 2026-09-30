@@ -1143,9 +1143,18 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
             .border(1.dp, border, RoundedCornerShape(7.dp))
             .padding(horizontal = 10.dp, vertical = 9.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("What moved the premium", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ink)
-            Text(headline, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ink)
+        // spacedBy, not SpaceBetween: SpaceBetween only adds leftover width, so at large font
+        // scales the two labels ran together. The title takes the remaining width and wraps;
+        // the headline keeps a guaranteed gap and stays right-aligned.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "What moved the premium",
+                modifier = Modifier.weight(1f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = ink,
+            )
+            Text(headline, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ink, textAlign = TextAlign.End)
         }
         Row(
             Modifier
