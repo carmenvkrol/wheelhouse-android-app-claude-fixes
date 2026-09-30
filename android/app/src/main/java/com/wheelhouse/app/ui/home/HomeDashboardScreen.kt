@@ -1183,7 +1183,17 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
             )
             Text("ν ${split.vegaLabel} ${split.vegaPct}%", fontSize = 9.5.sp, color = ink)
         }
-        Text(split.note, modifier = Modifier.padding(top = 7.dp), fontSize = 11.sp, color = ink, lineHeight = 15.5.sp)
+        // "→" here means a change from one value to another ("IV rank 54 → 81"). TalkBack
+        // reads the glyph's shape ("right arrow"), so the spoken label says "to" instead.
+        Text(
+            split.note,
+            modifier = Modifier
+                .padding(top = 7.dp)
+                .semantics { contentDescription = split.note.replace(Regex("\\s*→\\s*"), " to ") },
+            fontSize = 11.sp,
+            color = ink,
+            lineHeight = 15.5.sp,
+        )
     }
 }
 
