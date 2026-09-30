@@ -1488,10 +1488,17 @@ private fun GrabberHandle() {
     )
 }
 
+/** What the confirm sheet says before an option is sent — see [ReasonGatedOptionsRow]. */
+private data class ConfirmSheetCopy(val title: String, val body: String, val confirmLabel: String)
+
 /**
  * [OptionsRow], but a tap on a `requires_reason` option opens the veto sheet first — the
  * callback only fires once a reason is captured, never for a bare tap. Shared by the entry
  * card's Veto and the vega card's Hold, the two `kind: reject` options in the sample data.
+ *
+ * Options for which [confirmation] returns copy open a confirm sheet instead (WCAG 3.3.4:
+ * a financial action gets a review-and-confirm step before it's sent). The default confirms
+ * nothing, so cards opt in per option.
  */
 @Composable
 private fun ReasonGatedOptionsRow(
@@ -1500,17 +1507,20 @@ private fun ReasonGatedOptionsRow(
     canAct: Boolean,
     onOptionSelected: (cardId: String, optionId: String, reason: String?) -> Unit,
     modifier: Modifier = Modifier,
+    confirmation: (DecisionOption) -> ConfirmSheetCopy? = { null },
 ) {
     var reasonSheetOptionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmSheetOptionId by rememberSaveable { mutableStateOf<String?>(null) }
     OptionsRow(
         options,
         canAct,
         modifier = modifier,
         onSelect = { optionId ->
-            if (options.first { it.id == optionId }.requiresReason) {
-                reasonSheetOptionId = optionId
-            } else {
-                onOptionSelected(cardId, optionId, null)
+            val option = options.first { it.id == optionId }
+            when {
+                option.requiresReason -> reasonSheetOptionId = optionId
+                confirmation(option) != null -> confirmSheetOptionId = optionId
+                else -> onOptionSelected(cardId, optionId, null)
             }
         },
     )
@@ -1522,6 +1532,72 @@ private fun ReasonGatedOptionsRow(
                 reasonSheetOptionId = null
             },
         )
+    }
+    confirmSheetOptionId?.let { optionId ->
+        options.firstOrNull { it.id == optionId }?.let(confirmation)?.let { copy ->
+            ConfirmActionSheet(
+                copy = copy,
+                onDismiss = { confirmSheetOptionId = null },
+                onConfirm = {
+                    onOptionSelected(cardId, optionId, null)
+                    confirmSheetOptionId = null
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConfirmActionSheetContent(
+    copy: ConfirmSheetCopy,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 18.dp)) {
+        Text(
+            copy.title,
+            modifier = Modifier.semantics { heading() },
+            fontSize = 15.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = Ink,
+        )
+        Text(
+            copy.body,
+            modifier = Modifier.padding(top = 5.dp, bottom = 14.dp),
+            fontSize = 11.5.sp,
+            color = Ink2,
+            lineHeight = 16.5.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            OptionButton(
+                option = DecisionOption("confirm_action", copy.confirmLabel, OptionKind.ACCEPT),
+                style = OptionButtonStyle.PRIMARY,
+                enabled = true,
+                modifier = Modifier.weight(1f),
+                onClick = onConfirm,
+            )
+            OptionButton(
+                option = DecisionOption("cancel", "Cancel", OptionKind.DEFER),
+                style = OptionButtonStyle.GHOST,
+                enabled = true,
+                modifier = Modifier.width(78.dp),
+                onClick = onCancel,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConfirmActionSheet(copy: ConfirmSheetCopy, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Paper,
+        dragHandle = { GrabberHandle() },
+    ) {
+        ConfirmActionSheetContent(copy = copy, onConfirm = onConfirm, onCancel = onDismiss)
     }
 }
 
@@ -1578,7 +1654,27 @@ private fun VegaDecisionCard(
         Spacer(Modifier.height(9.dp))
         AttributionBlock(card.split, modifier = Modifier.padding(bottom = 10.dp))
         ReasonsDisclosure(card.reasons, card.reasonsOpenByDefault, modifier = Modifier.padding(bottom = 11.dp))
-        ReasonGatedOptionsRow(card.id, card.options, canAct, onOptionSelected)
+        // Exit now places a trade and Snooze lets the deadline keep running, so both get a
+        // confirm step; Hold already has one (the reason sheet). Keyed on kind, not id — the
+        // server owns option ids.
+        val deadline = spokenDuration(card.deadlineLabel) ?: card.deadlineLabel
+        ReasonGatedOptionsRow(card.id, card.options, canAct, onOptionSelected) { option ->
+            when (option.kind) {
+                OptionKind.ACCEPT -> ConfirmSheetCopy(
+                    title = "Exit this position now?",
+                    body = "${card.sub}.\n\nThis closes the position at the current market price. " +
+                        "Once it's sent, it can't be undone.",
+                    confirmLabel = "Confirm exit",
+                )
+                OptionKind.DEFER -> ConfirmSheetCopy(
+                    title = "Snooze this decision?",
+                    body = "The card leaves your list for now, but its deadline keeps running — " +
+                        "it's due in $deadline. It escalates to a pager push before it expires.",
+                    confirmLabel = "Confirm snooze",
+                )
+                else -> null
+            }
+        }
         if (!canAct) {
             OfflineNote("Approvals need a live connection. This card escalates to a pager push before its deadline expires.")
         }
