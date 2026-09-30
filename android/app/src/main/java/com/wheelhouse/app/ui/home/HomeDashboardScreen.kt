@@ -1173,7 +1173,14 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
             Box(Modifier.weight(split.vegaPct.coerceAtLeast(1).toFloat()).fillMaxHeight().background(Vega))
         }
         Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Δ delta ${split.deltaPct}%", fontSize = 9.5.sp, color = ink)
+            // TalkBack reads the "Δ" glyph as "delta", so the visible text came out as
+            // "delta delta 22%"; the spoken label drops the glyph.
+            Text(
+                "Δ delta ${split.deltaPct}%",
+                modifier = Modifier.semantics { contentDescription = "delta ${split.deltaPct}%" },
+                fontSize = 9.5.sp,
+                color = ink,
+            )
             Text("ν ${split.vegaLabel} ${split.vegaPct}%", fontSize = 9.5.sp, color = ink)
         }
         Text(split.note, modifier = Modifier.padding(top = 7.dp), fontSize = 11.sp, color = ink, lineHeight = 15.5.sp)
