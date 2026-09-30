@@ -1,8 +1,10 @@
 package com.wheelhouse.app.ui.theme
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 
 private val WheelHouseColorScheme = lightColorScheme(
     primary = Ink,
@@ -30,6 +32,11 @@ fun WheelHouseTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = WheelHouseColorScheme,
         typography = Typography,
-        content = content,
-    )
+    ) {
+        // MaterialTheme has just provided its ripple; wrap it so keyboard focus is visible.
+        CompositionLocalProvider(
+            LocalIndication provides FocusRingIndication(LocalIndication.current),
+            content = content,
+        )
+    }
 }
