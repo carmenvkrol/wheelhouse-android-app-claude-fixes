@@ -22,6 +22,10 @@ val AlarmBg = Color(0xFFFDECEB)
 val AlarmLine = Color(0xFFDC9A95)
 val AlarmInk = Color(0xFF96322B)
 
+// The delta segment of the attribution bar. AlarmLine (2.0:1 on VegaBg/AlarmBg) is too light
+// for a meaningful graphic under WCAG 1.4.11; this keeps the alarm hue at ≥4.12:1.
+val DeltaBar = Color(0xFFBF5048)
+
 val Ok = Color(0xFF4A7C59)
 
 // Vega-driven adverse marks. Distinct from Alarm on purpose: REQUIREMENTS §6.1

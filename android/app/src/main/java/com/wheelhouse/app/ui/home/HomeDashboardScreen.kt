@@ -74,6 +74,7 @@ import com.wheelhouse.app.ui.theme.AlarmBg
 import com.wheelhouse.app.ui.theme.AlarmInk
 import com.wheelhouse.app.ui.theme.AlarmLine
 import com.wheelhouse.app.ui.theme.Bg
+import com.wheelhouse.app.ui.theme.DeltaBar
 import com.wheelhouse.app.ui.theme.Fill
 import com.wheelhouse.app.ui.theme.Ink
 import com.wheelhouse.app.ui.theme.Ink2
@@ -1156,6 +1157,9 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
             )
             Text(headline, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ink, textAlign = TextAlign.End)
         }
+        // WCAG 1.4.11: DeltaBar is ≥4.12:1 on VegaBg/AlarmBg. No red can also reach 3:1
+        // against the adjacent Vega segment, so a 2dp Paper gap marks the boundary instead —
+        // both segments contrast with it (DeltaBar 4.71:1, Vega 5.00:1).
         Row(
             Modifier
                 .fillMaxWidth()
@@ -1163,8 +1167,9 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
                 .height(7.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(Paper),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Box(Modifier.weight(split.deltaPct.coerceAtLeast(1).toFloat()).fillMaxHeight().background(AlarmLine))
+            Box(Modifier.weight(split.deltaPct.coerceAtLeast(1).toFloat()).fillMaxHeight().background(DeltaBar))
             Box(Modifier.weight(split.vegaPct.coerceAtLeast(1).toFloat()).fillMaxHeight().background(Vega))
         }
         Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
