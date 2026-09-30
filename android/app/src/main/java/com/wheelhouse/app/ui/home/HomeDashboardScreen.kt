@@ -1146,8 +1146,12 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
     ) {
         // spacedBy, not SpaceBetween: SpaceBetween only adds leftover width, so at large font
         // scales the two labels ran together. The title takes the remaining width and wraps;
-        // the headline keeps a guaranteed gap and stays right-aligned.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // the headline keeps a guaranteed gap and stays right-aligned. Merged so TalkBack
+        // reads title and headline as one stop ("What moved the premium, vega 78%").
+        Row(
+            Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             Text(
                 "What moved the premium",
                 modifier = Modifier.weight(1f),
