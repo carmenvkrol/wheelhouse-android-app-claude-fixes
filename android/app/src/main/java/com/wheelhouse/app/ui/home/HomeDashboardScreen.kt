@@ -50,7 +50,16 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.CollectionInfo
+import androidx.compose.ui.semantics.CollectionItemInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collectionInfo
+import androidx.compose.ui.semantics.collectionItemInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,6 +74,7 @@ import com.wheelhouse.app.ui.theme.AlarmBg
 import com.wheelhouse.app.ui.theme.AlarmInk
 import com.wheelhouse.app.ui.theme.AlarmLine
 import com.wheelhouse.app.ui.theme.Bg
+import com.wheelhouse.app.ui.theme.DeltaBar
 import com.wheelhouse.app.ui.theme.Fill
 import com.wheelhouse.app.ui.theme.Ink
 import com.wheelhouse.app.ui.theme.Ink2
@@ -936,15 +946,19 @@ private fun CardHeader(
                 color = typeColor,
                 fontWeight = FontWeight.Bold,
             )
+            // Styled as the card's title, so it's exposed as a heading too — TalkBack
+            // announces it as one and heading navigation can jump between cards.
             Text(
                 action,
-                modifier = Modifier.padding(top = 3.dp),
+                modifier = Modifier.padding(top = 3.dp).semantics { heading() },
                 fontSize = 14.5.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
                 lineHeight = 19.sp,
             )
-            Text(sub, modifier = Modifier.padding(top = 3.dp), fontSize = 10.5.sp, color = Ink3)
+            // Ink2, not Ink3: 10.5sp is normal-size text, so WCAG 1.4.3 needs 4.5:1 on
+            // Paper. Ink3 only reaches 3.28:1; Ink2 is 6.69:1.
+            Text(sub, modifier = Modifier.padding(top = 3.dp), fontSize = 10.5.sp, color = Ink2)
         }
         DeadlineChip(deadlineLabel, deadlineHot)
     }
@@ -955,9 +969,11 @@ private fun DeadlineChip(label: String, hot: Boolean, modifier: Modifier = Modif
     val background = if (hot) WarnBg else Fill
     val outline = if (hot) WarnLine else Line2
     val ink = if (hot) WarnInk else Ink2
+    val spoken = spokenDuration(label)
     Text(
         label,
         modifier = modifier
+            .then(if (spoken != null) Modifier.semantics { contentDescription = spoken } else Modifier)
             .clip(RoundedCornerShape(5.dp))
             .background(background)
             .border(1.dp, outline, RoundedCornerShape(5.dp))
@@ -966,6 +982,23 @@ private fun DeadlineChip(label: String, hot: Boolean, modifier: Modifier = Modif
         fontWeight = FontWeight.SemiBold,
         color = ink,
     )
+}
+
+/**
+ * `deadline_label` arrives pre-formatted ("41m", "2h 14m", "1d 04h"). TalkBack reads a bare
+ * "m" as meters, so the chip gets these units spelled out for screen readers. Returns null
+ * for anything not in that shape, leaving TalkBack on the visible text.
+ */
+private fun spokenDuration(label: String): String? {
+    val parts = label.trim().split(Regex("\\s+"))
+    val units = mapOf('d' to "day", 'h' to "hour", 'm' to "minute")
+    val spoken = parts.map { part ->
+        val match = Regex("(\\d+)([dhm])").matchEntire(part) ?: return null
+        val count = match.groupValues[1].toInt()
+        val unit = units.getValue(match.groupValues[2][0])
+        "$count ${if (count == 1) unit else unit + "s"}"
+    }
+    return spoken.joinToString(" ")
 }
 
 /** The entry card's headline: annualized-at-floor, big, with the rubric gate check beside it. */
@@ -1039,16 +1072,22 @@ private fun ReasonsDisclosure(reasons: List<String>, openByDefault: Boolean, mod
             .drawBehind { drawLine(Line2, Offset(0f, 0f), Offset(size.width, 0f), strokeWidth = 1.dp.toPx()) }
             .padding(top = 9.dp),
     ) {
+        // Expanded/collapsed is exposed as a state (stateDescription), not baked into the
+        // click label, so the spoken label stays the same across toggles. The arrow glyph
+        // only restates that state visually, so it's hidden from accessibility services.
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable(
-                    onClickLabel = if (expanded) "Collapse reasons" else "Expand reasons",
-                    role = Role.Button,
-                ) { expanded = !expanded },
+                .clickable(role = Role.Button) { expanded = !expanded }
+                .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(if (expanded) "▾" else "▸", fontSize = 9.sp, color = Ink3)
+            Text(
+                if (expanded) "▾" else "▸",
+                modifier = Modifier.clearAndSetSemantics {},
+                fontSize = 9.sp,
+                color = Ink3,
+            )
             Text(
                 "Why the engine wants this (${reasons.size})",
                 modifier = Modifier.padding(start = 5.dp),
@@ -1057,11 +1096,28 @@ private fun ReasonsDisclosure(reasons: List<String>, openByDefault: Boolean, mod
             )
         }
         if (expanded) {
-            Column(Modifier.padding(top = 9.dp)) {
-                reasons.forEach {
-                    Row(Modifier.padding(bottom = 4.dp)) {
-                        Text("•  ", fontSize = 11.5.sp, color = Ink2)
-                        Text(it, fontSize = 11.5.sp, color = Ink2, lineHeight = 16.sp)
+            // Exposed as a list so TalkBack announces each reason's position ("2 of 3").
+            // The bullet glyph is decorative and hidden; each row merges into one focus stop.
+            Column(
+                Modifier
+                    .padding(top = 9.dp)
+                    .semantics { collectionInfo = CollectionInfo(rowCount = reasons.size, columnCount = 1) },
+            ) {
+                reasons.forEachIndexed { index, reason ->
+                    Row(
+                        Modifier
+                            .padding(bottom = 4.dp)
+                            .semantics(mergeDescendants = true) {
+                                collectionItemInfo = CollectionItemInfo(
+                                    rowIndex = index,
+                                    rowSpan = 1,
+                                    columnIndex = 0,
+                                    columnSpan = 1,
+                                )
+                            },
+                    ) {
+                        Text("•  ", modifier = Modifier.clearAndSetSemantics {}, fontSize = 11.5.sp, color = Ink2)
+                        Text(reason, fontSize = 11.5.sp, color = Ink2, lineHeight = 16.sp)
                     }
                 }
             }
@@ -1088,10 +1144,26 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
             .border(1.dp, border, RoundedCornerShape(7.dp))
             .padding(horizontal = 10.dp, vertical = 9.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("What moved the premium", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ink)
-            Text(headline, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ink)
+        // spacedBy, not SpaceBetween: SpaceBetween only adds leftover width, so at large font
+        // scales the two labels ran together. The title takes the remaining width and wraps;
+        // the headline keeps a guaranteed gap and stays right-aligned. Merged so TalkBack
+        // reads title and headline as one stop ("What moved the premium, vega 78%").
+        Row(
+            Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "What moved the premium",
+                modifier = Modifier.weight(1f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = ink,
+            )
+            Text(headline, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = ink, textAlign = TextAlign.End)
         }
+        // WCAG 1.4.11: DeltaBar is ≥4.12:1 on VegaBg/AlarmBg. No red can also reach 3:1
+        // against the adjacent Vega segment, so a 2dp Paper gap marks the boundary instead —
+        // both segments contrast with it (DeltaBar 4.71:1, Vega 5.00:1).
         Row(
             Modifier
                 .fillMaxWidth()
@@ -1099,15 +1171,33 @@ private fun AttributionBlock(split: AttributionSplit, modifier: Modifier = Modif
                 .height(7.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(Paper),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Box(Modifier.weight(split.deltaPct.coerceAtLeast(1).toFloat()).fillMaxHeight().background(AlarmLine))
+            Box(Modifier.weight(split.deltaPct.coerceAtLeast(1).toFloat()).fillMaxHeight().background(DeltaBar))
             Box(Modifier.weight(split.vegaPct.coerceAtLeast(1).toFloat()).fillMaxHeight().background(Vega))
         }
         Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Δ delta ${split.deltaPct}%", fontSize = 9.5.sp, color = ink)
+            // TalkBack reads the "Δ" glyph as "delta", so the visible text came out as
+            // "delta delta 22%"; the spoken label drops the glyph.
+            Text(
+                "Δ delta ${split.deltaPct}%",
+                modifier = Modifier.semantics { contentDescription = "delta ${split.deltaPct}%" },
+                fontSize = 9.5.sp,
+                color = ink,
+            )
             Text("ν ${split.vegaLabel} ${split.vegaPct}%", fontSize = 9.5.sp, color = ink)
         }
-        Text(split.note, modifier = Modifier.padding(top = 7.dp), fontSize = 11.sp, color = ink, lineHeight = 15.5.sp)
+        // "→" here means a change from one value to another ("IV rank 54 → 81"). TalkBack
+        // reads the glyph's shape ("right arrow"), so the spoken label says "to" instead.
+        Text(
+            split.note,
+            modifier = Modifier
+                .padding(top = 7.dp)
+                .semantics { contentDescription = split.note.replace(Regex("\\s*→\\s*"), " to ") },
+            fontSize = 11.sp,
+            color = ink,
+            lineHeight = 15.5.sp,
+        )
     }
 }
 
@@ -1154,8 +1244,12 @@ private fun OptionButton(
         OptionButtonStyle.GHOST -> Ink2
         OptionButtonStyle.PLAIN -> Ink
     }
-    Text(
-        option.label,
+    // The label is exposed as a contentDescription and the Text's own semantics are
+    // cleared: when a node's merged semantics contain Text, Compose's accessibility
+    // delegate overwrites the Role-derived className (android.widget.Button) with
+    // android.widget.TextView, so TalkBack never announced "Button". Putting the
+    // clickable directly on a Text can't avoid that — the text lands on the same node.
+    Box(
         // alpha goes first (outermost) so it fades the whole button — box, border, and
         // text together. Placed after background/border it only faded the text, and on
         // this device that combination went fully blank on the enabled→disabled→enabled
@@ -1167,12 +1261,19 @@ private fun OptionButton(
             .background(background)
             .border(1.dp, border, RoundedCornerShape(7.dp))
             .clickable(enabled = enabled, onClickLabel = option.label, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = option.label }
             .padding(vertical = 9.dp),
-        fontSize = 12.5.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = ink,
-        textAlign = TextAlign.Center,
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            option.label,
+            modifier = Modifier.clearAndSetSemantics {},
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = ink,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 /**
@@ -1387,10 +1488,17 @@ private fun GrabberHandle() {
     )
 }
 
+/** What the confirm sheet says before an option is sent — see [ReasonGatedOptionsRow]. */
+private data class ConfirmSheetCopy(val title: String, val body: String, val confirmLabel: String)
+
 /**
  * [OptionsRow], but a tap on a `requires_reason` option opens the veto sheet first — the
  * callback only fires once a reason is captured, never for a bare tap. Shared by the entry
  * card's Veto and the vega card's Hold, the two `kind: reject` options in the sample data.
+ *
+ * Options for which [confirmation] returns copy open a confirm sheet instead (WCAG 3.3.4:
+ * a financial action gets a review-and-confirm step before it's sent). The default confirms
+ * nothing, so cards opt in per option.
  */
 @Composable
 private fun ReasonGatedOptionsRow(
@@ -1399,17 +1507,20 @@ private fun ReasonGatedOptionsRow(
     canAct: Boolean,
     onOptionSelected: (cardId: String, optionId: String, reason: String?) -> Unit,
     modifier: Modifier = Modifier,
+    confirmation: (DecisionOption) -> ConfirmSheetCopy? = { null },
 ) {
     var reasonSheetOptionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var confirmSheetOptionId by rememberSaveable { mutableStateOf<String?>(null) }
     OptionsRow(
         options,
         canAct,
         modifier = modifier,
         onSelect = { optionId ->
-            if (options.first { it.id == optionId }.requiresReason) {
-                reasonSheetOptionId = optionId
-            } else {
-                onOptionSelected(cardId, optionId, null)
+            val option = options.first { it.id == optionId }
+            when {
+                option.requiresReason -> reasonSheetOptionId = optionId
+                confirmation(option) != null -> confirmSheetOptionId = optionId
+                else -> onOptionSelected(cardId, optionId, null)
             }
         },
     )
@@ -1421,6 +1532,72 @@ private fun ReasonGatedOptionsRow(
                 reasonSheetOptionId = null
             },
         )
+    }
+    confirmSheetOptionId?.let { optionId ->
+        options.firstOrNull { it.id == optionId }?.let(confirmation)?.let { copy ->
+            ConfirmActionSheet(
+                copy = copy,
+                onDismiss = { confirmSheetOptionId = null },
+                onConfirm = {
+                    onOptionSelected(cardId, optionId, null)
+                    confirmSheetOptionId = null
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConfirmActionSheetContent(
+    copy: ConfirmSheetCopy,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 18.dp)) {
+        Text(
+            copy.title,
+            modifier = Modifier.semantics { heading() },
+            fontSize = 15.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = Ink,
+        )
+        Text(
+            copy.body,
+            modifier = Modifier.padding(top = 5.dp, bottom = 14.dp),
+            fontSize = 11.5.sp,
+            color = Ink2,
+            lineHeight = 16.5.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+            OptionButton(
+                option = DecisionOption("confirm_action", copy.confirmLabel, OptionKind.ACCEPT),
+                style = OptionButtonStyle.PRIMARY,
+                enabled = true,
+                modifier = Modifier.weight(1f),
+                onClick = onConfirm,
+            )
+            OptionButton(
+                option = DecisionOption("cancel", "Cancel", OptionKind.DEFER),
+                style = OptionButtonStyle.GHOST,
+                enabled = true,
+                modifier = Modifier.width(78.dp),
+                onClick = onCancel,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ConfirmActionSheet(copy: ConfirmSheetCopy, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Paper,
+        dragHandle = { GrabberHandle() },
+    ) {
+        ConfirmActionSheetContent(copy = copy, onConfirm = onConfirm, onCancel = onDismiss)
     }
 }
 
@@ -1477,7 +1654,27 @@ private fun VegaDecisionCard(
         Spacer(Modifier.height(9.dp))
         AttributionBlock(card.split, modifier = Modifier.padding(bottom = 10.dp))
         ReasonsDisclosure(card.reasons, card.reasonsOpenByDefault, modifier = Modifier.padding(bottom = 11.dp))
-        ReasonGatedOptionsRow(card.id, card.options, canAct, onOptionSelected)
+        // Exit now places a trade and Snooze lets the deadline keep running, so both get a
+        // confirm step; Hold already has one (the reason sheet). Keyed on kind, not id — the
+        // server owns option ids.
+        val deadline = spokenDuration(card.deadlineLabel) ?: card.deadlineLabel
+        ReasonGatedOptionsRow(card.id, card.options, canAct, onOptionSelected) { option ->
+            when (option.kind) {
+                OptionKind.ACCEPT -> ConfirmSheetCopy(
+                    title = "Exit this position now?",
+                    body = "${card.sub}.\n\nThis closes the position at the current market price. " +
+                        "Once it's sent, it can't be undone.",
+                    confirmLabel = "Confirm exit",
+                )
+                OptionKind.DEFER -> ConfirmSheetCopy(
+                    title = "Snooze this decision?",
+                    body = "The card leaves your list for now, but its deadline keeps running — " +
+                        "it's due in $deadline. It escalates to a pager push before it expires.",
+                    confirmLabel = "Confirm snooze",
+                )
+                else -> null
+            }
+        }
         if (!canAct) {
             OfflineNote("Approvals need a live connection. This card escalates to a pager push before its deadline expires.")
         }

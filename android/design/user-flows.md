@@ -128,17 +128,36 @@ The longest flow in the app, and the only form.
 
 ### H5 — Snooze a decision
 - **Entry:** Home, any card with a Snooze option.
-- **Steps:** tap **Snooze** (ghost-styled, narrower than its siblings) → immediate POST →
-  refresh → card leaves the list.
-- **Branches:** post fails → logged, no message, card stays. Otherwise none: no confirmation,
-  no undo, no indication of how long a snooze lasts.
+- **Steps (entry card):** tap **Snooze** (ghost-styled, narrower than its siblings) → immediate
+  POST → refresh → card leaves the list.
+- **Steps (vega-trigger card):** tap **Snooze** → a modal bottom sheet, "Snooze this
+  decision?", says the card leaves the list but its deadline keeps running (e.g. "due in 41
+  minutes") and that it escalates to a pager push before it expires → tap **Confirm snooze** →
+  sheet dismisses → POST → refresh → card leaves the list.
+- **Alternates (vega card only, all abandon the snooze, nothing sent):** tap **Cancel**, tap
+  the scrim, system back, or drag the sheet down.
+- **Branches:** post fails → logged, no message, card stays. No undo on either card, and no
+  indication of how long a snooze lasts (the API doesn't send a duration). The entry card's
+  Snooze still has no confirmation step.
 
 ### H6 — Resolve a stop-trigger (vega) card
 - **Entry:** Home, vega-trigger card (stop hit, but the adverse move is vega-driven).
 - **Steps:** read the reasons (already expanded) → read the attribution split → choose one of
   **Exit now** / **Hold** / **Snooze**.
-- **Branches:** Exit now → H3-shaped single tap. Hold → H4 (reason sheet). Snooze → H5.
-  Any of the three can fail silently, as in H3.
+- **Branches:**
+  - **Exit now** → a modal bottom sheet, "Exit this position now?", repeats the price line
+    ("Sold $3.10 · now $6.50 to close — 2.10× credit · 4 DTE") and says the exit closes the
+    position at market and can't be undone once sent → tap **Confirm exit** → sheet dismisses
+    → POST → refresh → card disappears. **Cancel**, the scrim, system back, or dragging the
+    sheet down abandon the exit; nothing is sent.
+  - **Hold** → H4 (reason sheet).
+  - **Snooze** → H5, vega-card variant (confirm sheet).
+  - Any of the three can fail silently after confirming, as in H3.
+- **Why every option confirms here (WCAG 3.3.4):** Exit now closes a real position, so it
+  gets a review-and-confirm step; Snooze lets a deadline keep running, so it gets the same.
+  Hold already confirmed through the reason sheet. It also keeps Exit now and Hold close in
+  tap cost (tap + confirm vs. tap + reason + confirm), which ui-from-requirements.md cares
+  about on this card.
 - **Note:** this card has **no default option**, so no button is primary-styled — the three
   buttons carry equal visual weight by design.
 - **Under review:** the hold-vs-exit judgment depends entirely on the attribution split, which
